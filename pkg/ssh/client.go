@@ -8,11 +8,13 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Client struct
 type Client struct {
 	Hosts []Host   `yaml:"hosts" json:"hosts,omitempty"`
 	Cmd   []string `yaml:"cmd" json:"cmd,omitempty"`
 }
 
+// NewClientFromYAML func
 func NewClientFromYAML(config string) (*Client, error) {
 	client := &Client{}
 	err := YAMLToInterface(config, client)
@@ -50,6 +52,7 @@ func (c *Client) validate() error {
 	return nil
 }
 
+// Run func
 func (c *Client) Run() error {
 	var wg sync.WaitGroup
 	wgErrors := make(chan error)

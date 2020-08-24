@@ -9,6 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// RunCommand func
 func RunCommand() *cli.Command {
 	runFlags := []cli.Flag{
 		&cli.StringFlag{
@@ -69,6 +70,7 @@ func RunCommand() *cli.Command {
 	}
 }
 
+// RunFromCli func
 func RunFromCli(ctx *cli.Context) error {
 	logrus.Infof("Running ssh-client version: %v", ctx.App.Version)
 	return fmt.Errorf("%s", ctx.String("ssh_key_path"))
@@ -108,6 +110,7 @@ func RunFromCli(ctx *cli.Context) error {
 	return Run(output)
 }
 
+// Run func
 func Run(params map[string]interface{}) error {
 	config, err := ssh.InterfaceToYAML(params)
 	if err != nil {

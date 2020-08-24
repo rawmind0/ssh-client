@@ -11,6 +11,7 @@ import (
 	"golang.org/x/crypto/ssh/agent"
 )
 
+// Dialer struct
 type Dialer struct {
 	client *ssh.Client
 	err    error
@@ -18,18 +19,22 @@ type Dialer struct {
 	stderr io.Writer
 }
 
+// NewDialerWithPasswd func
 func NewDialerWithPasswd(addr, user, pass string) (*Dialer, error) {
 	return NewDialer(addr, user, pass, "", "", false)
 }
 
+// NewDialerWithKey func
 func NewDialerWithKey(addr, user, key, keypass string) (*Dialer, error) {
 	return NewDialer(addr, user, "", key, keypass, false)
 }
 
+// NewDialerWithKeyAgent func
 func NewDialerWithKeyAgent(addr, user string) (*Dialer, error) {
 	return NewDialer(addr, user, "", "", "", true)
 }
 
+// NewDialer func
 func NewDialer(addr, user, pass, key, keyPass string, keyAgent bool) (*Dialer, error) {
 	if len(addr) == 0 {
 		return nil, fmt.Errorf("New dialer: host address should be provided")
@@ -92,6 +97,7 @@ func newDialerConfig(user, pass, key, keyPass string, keyAgent bool) (string, *s
 	return "", nil, fmt.Errorf("New dialer config: auth method not found")
 }
 
+// Dial func
 func (c *Dialer) Dial(network, addr string, config *ssh.ClientConfig) (*Dialer, error) {
 	connClient, err := ssh.Dial(network, addr, config)
 	if err != nil {
@@ -102,6 +108,7 @@ func (c *Dialer) Dial(network, addr string, config *ssh.ClientConfig) (*Dialer, 
 	return c, nil
 }
 
+// Close func
 func (c *Dialer) Close() error {
 	logrus.Tracef("Dialer closed")
 	if c.client == nil {
@@ -110,6 +117,7 @@ func (c *Dialer) Close() error {
 	return c.client.Close()
 }
 
+// Cmd func
 func (c *Dialer) Cmd(cmd string) error {
 	session, err := c.client.NewSession()
 	if err != nil {
@@ -120,6 +128,7 @@ func (c *Dialer) Cmd(cmd string) error {
 	return session.Run(cmd)
 }
 
+// Output func
 func (c *Dialer) Output(cmd string) ([]byte, error) {
 	session, err := c.client.NewSession()
 	if err != nil {
@@ -130,6 +139,7 @@ func (c *Dialer) Output(cmd string) ([]byte, error) {
 	return session.Output(cmd)
 }
 
+// CombinedOutput func
 func (c *Dialer) CombinedOutput(cmd string) ([]byte, error) {
 	session, err := c.client.NewSession()
 	if err != nil {

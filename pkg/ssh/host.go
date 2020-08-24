@@ -8,10 +8,12 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// DefaultPort const
 const DefaultPort = "22"
-
+// DefaultKeyPath var
 var DefaultKeyPath string
 
+// Host struct
 type Host struct {
 	Address      string `yaml:"address" json:"address,omitempty"`
 	Port         string `yaml:"port" json:"port,omitempty"`
@@ -26,15 +28,17 @@ type Host struct {
 	dialer       *Dialer
 }
 
+// InitKeyPath func
 func InitKeyPath() string {
 	user, err := user.Current()
-    if err != nil {
-        panic(err)
-    }
-    DefaultKeyPath = user.HomeDir+"/.ssh/id_rsa"
-    return DefaultKeyPath
+	if err != nil {
+		panic(err)
+	}
+	DefaultKeyPath = user.HomeDir + "/.ssh/id_rsa"
+	return DefaultKeyPath
 }
 
+// Dial func
 func (h *Host) Dial() error {
 	if len(h.User) == 0 {
 		return fmt.Errorf("[%s:%s] Dialing host: user is nil", h.Address, h.Port)
@@ -73,6 +77,7 @@ func (h *Host) validate() error {
 	return nil
 }
 
+// Close func
 func (h *Host) Close() error {
 	if h.dialer == nil {
 		return nil
@@ -81,6 +86,7 @@ func (h *Host) Close() error {
 	return h.dialer.Close()
 }
 
+// Cmd func
 func (h *Host) Cmd(cmds []string) error {
 	cmd := ""
 	for i := range cmds {
@@ -97,6 +103,7 @@ func (h *Host) Cmd(cmds []string) error {
 	return nil
 }
 
+// Output func
 func (h *Host) Output(cmds []string) ([]byte, error) {
 	cmd := ""
 	for i := range cmds {
@@ -113,6 +120,7 @@ func (h *Host) Output(cmds []string) ([]byte, error) {
 	return out, nil
 }
 
+// CombinedOutput func
 func (h *Host) CombinedOutput(cmds []string) ([]byte, error) {
 	cmd := ""
 	for i := range cmds {

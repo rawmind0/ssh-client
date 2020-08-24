@@ -9,6 +9,7 @@ import (
 
 const separator = ","
 
+// SplitBySep func
 func SplitBySep(s string) []interface{} {
 	if len(s) == 0 {
 		return nil
@@ -25,6 +26,7 @@ func toArrayInterface(in []string) []interface{} {
 	return out
 }
 
+// YAMLToMapInterface func
 func YAMLToMapInterface(in string) (map[string]interface{}, error) {
 	out := make(map[string]interface{})
 	err := yaml.Unmarshal([]byte(in), &out)
@@ -34,6 +36,7 @@ func YAMLToMapInterface(in string) (map[string]interface{}, error) {
 	return out, err
 }
 
+// YAMLToInterface func
 func YAMLToInterface(in string, out interface{}) error {
 	if out == nil {
 		return nil
@@ -45,6 +48,7 @@ func YAMLToInterface(in string, out interface{}) error {
 	return err
 }
 
+// GhodssYAMLToMapInterface func
 func GhodssYAMLToMapInterface(in string) (map[string]interface{}, error) {
 	out := make(map[string]interface{})
 	err := ghodssyaml.Unmarshal([]byte(in), &out)
@@ -54,6 +58,7 @@ func GhodssYAMLToMapInterface(in string) (map[string]interface{}, error) {
 	return out, err
 }
 
+// GhodssYAMLToInterface func
 func GhodssYAMLToInterface(in string, out interface{}) error {
 	if out == nil {
 		return nil
@@ -65,6 +70,7 @@ func GhodssYAMLToInterface(in string, out interface{}) error {
 	return err
 }
 
+// InterfaceToYAML func
 func InterfaceToYAML(in interface{}) (string, error) {
 	if in == nil {
 		return "", nil
@@ -76,6 +82,7 @@ func InterfaceToYAML(in interface{}) (string, error) {
 	return string(out), err
 }
 
+// InterfaceToGhodssYAML func
 func InterfaceToGhodssYAML(in interface{}) (string, error) {
 	if in == nil {
 		return "", nil
