@@ -1,5 +1,6 @@
 TARGETS := $(shell ls scripts)
 GOFMT_FILES?=$$(find . -name '*.go' |grep -v vendor)
+GOFMT_CHECK?=$$(gofmt -l -s ${GOFMT_FILES})
 
 default: build
 
@@ -59,7 +60,6 @@ fmt:
 
 fmtcheck:
 	@echo "==> Checking that code complies with gofmt requirements..."
-	@GOFMT_CHECK=$(gofmt -l -s ${GOFMT_FILES})
 	@if [ -n "${GOFMT_CHECK}" ]; then \
 	    echo 'gofmt needs running on the following files:'; \
 	    echo "${GOFMT_CHECK}"; \
