@@ -10,6 +10,7 @@ import (
 
 // DefaultPort const
 const DefaultPort = "22"
+
 // DefaultKeyPath var
 var DefaultKeyPath string
 
