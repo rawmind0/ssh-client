@@ -1,8 +1,8 @@
 package ssh
 
 import (
+	"context"
 	"fmt"
-	"io"
 	"net"
 	"os"
 
@@ -11,12 +11,11 @@ import (
 	"golang.org/x/crypto/ssh/agent"
 )
 
+const dialerDebugIndent = "    "
+
 // Dialer struct
 type Dialer struct {
 	client *ssh.Client
-	err    error
-	stdout io.Writer
-	stderr io.Writer
 }
 
 // NewDialerWithPasswd func
@@ -48,7 +47,7 @@ func NewDialer(addr, user, pass, key, keyPass string, keyAgent bool) (*Dialer, e
 	if err != nil {
 		return nil, fmt.Errorf("New dialer: %v", err)
 	}
-	logrus.Debugf("[%s] New dialer created: %s auth", addr, kind)
+	logrus.Debugf("%sNew dialer created: %s auth", dialerDebugIndent, kind)
 	return dialer, nil
 }
 
@@ -74,7 +73,7 @@ func newDialerConfig(user, pass, key, keyPass string, keyAgent bool) (string, *s
 			return "", nil, fmt.Errorf("New dialer config: publickey auth: %v", err)
 		}
 		config.Auth = append(config.Auth, ssh.PublicKeys(signer))
-		logrus.Tracef("New dialer config: ssh key auth")
+		logrus.Debugf("%sNew dialer config: ssh key auth", dialerDebugIndent)
 		return "ssh key", config, nil
 	}
 
@@ -84,13 +83,13 @@ func newDialerConfig(user, pass, key, keyPass string, keyAgent bool) (string, *s
 			return "", nil, fmt.Errorf("New dialer config: Cannot connect to SSH Auth socket %q: %s", sshAgentSock, err)
 		}
 		config.Auth = append(config.Auth, ssh.PublicKeysCallback(agent.NewClient(sshAgent).Signers))
-		logrus.Tracef("New dialer config: ssh key agent auth")
+		logrus.Debugf("%sNew dialer config: ssh key agent auth", dialerDebugIndent)
 		return "ssh key agent", config, nil
 	}
 
 	if len(pass) > 0 {
 		config.Auth = append(config.Auth, ssh.Password(pass))
-		logrus.Tracef("New dialer config: password auth")
+		logrus.Debugf("%sNew dialer config: password auth", dialerDebugIndent)
 		return "password", config, nil
 	}
 
@@ -99,58 +98,154 @@ func newDialerConfig(user, pass, key, keyPass string, keyAgent bool) (string, *s
 
 // Dial func
 func (c *Dialer) Dial(network, addr string, config *ssh.ClientConfig) (*Dialer, error) {
+	logrus.Debugf("%sDialer openning...", dialerDebugIndent)
 	connClient, err := ssh.Dial(network, addr, config)
 	if err != nil {
 		return nil, fmt.Errorf("[%s] Dialing host: %v", addr, err)
 	}
 	c.client = connClient
-	logrus.Tracef("Dialer opened")
+	logrus.Debugf("%sDialer opened", dialerDebugIndent)
 	return c, nil
 }
 
 // Close func
 func (c *Dialer) Close() error {
-	logrus.Tracef("Dialer closed")
-	if c.client == nil {
-		return nil
+	logrus.Debugf("%sDialer closing...", dialerDebugIndent)
+	if c.client != nil {
+		if err := c.client.Close(); err != nil {
+			return err
+		}
 	}
-	return c.client.Close()
+	logrus.Debugf("%sDialer closed", dialerDebugIndent)
+	return nil
+}
+
+// Run func
+func (c *Dialer) Run(ctx context.Context, cmd, kind string) ([]byte, error) {
+	logrus.Debugf("%sDialer run executing...", dialerDebugIndent)
+	if len(cmd) == 0 {
+		return nil, fmt.Errorf("Dialer run failed: Command is nil")
+	}
+	session, err := c.client.NewSession()
+	if err != nil {
+		return nil, err
+	}
+	defer session.Close()
+	var data []byte
+	wgErrors, errStrings := newErrorByChan()
+	go func() {
+		var err error
+		switch kind {
+		case "cmd":
+			err = session.Run(cmd)
+		case "output":
+			data, err = session.Output(cmd)
+		case "combined":
+			data, err = session.CombinedOutput(cmd)
+			if err != nil {
+				err = fmt.Errorf("%s", string(data))
+			}
+		}
+
+		if err != nil {
+			message := err.Error()
+			if len(message) > 0 {
+				wgErrors <- &message
+			}
+		}
+		close(wgErrors)
+	}()
+
+	select {
+	case <-ctx.Done():
+		session.Signal(ssh.SIGKILL)
+		logrus.Debugf("%sDialer run killed by user request", dialerDebugIndent)
+		return nil, fmt.Errorf("Dialer run execution killed by user request%s")
+	case errStr := <-wgErrors:
+		if errStr == nil {
+			break
+		}
+		errStrings = append(errStrings, *errStr)
+	}
+	if len(errStrings) > 0 {
+		return data, fmt.Errorf("Dialer run execution failed:\n%s", stringsToLines(errStrings))
+	}
+	logrus.Debugf("%sDialer run executed", dialerDebugIndent)
+	return data, nil
 }
 
 // Cmd func
-func (c *Dialer) Cmd(cmd string) error {
+func (c *Dialer) Cmd(ctx context.Context, cmd string) error {
+	logrus.Debugf("%sDialer cmd executing...", dialerDebugIndent)
 	session, err := c.client.NewSession()
 	if err != nil {
 		return err
 	}
 	defer session.Close()
-	logrus.Tracef("Dialer cmd executed")
-	return session.Run(cmd)
+
+	wgErrors, errStrings := newErrorByChan()
+	go func() {
+		if err := session.Run(cmd); err != nil {
+			message := err.Error()
+			if len(message) > 0 {
+				wgErrors <- &message
+			}
+		}
+		close(wgErrors)
+	}()
+
+	select {
+	case <-ctx.Done():
+		logrus.Debugf("%sDialer cmd killed", dialerDebugIndent)
+		session.Signal(ssh.SIGKILL)
+		break
+	case errStr := <-wgErrors:
+		if errStr == nil {
+			break
+		}
+		errStrings = append(errStrings, *errStr)
+	}
+	if len(errStrings) > 0 {
+		return fmt.Errorf("Dialer cmd execution failed:\n%s", stringsToLines(errStrings))
+	}
+	logrus.Debugf("%sDialer cmd executed", dialerDebugIndent)
+	return nil
 }
 
 // Output func
-func (c *Dialer) Output(cmd string) ([]byte, error) {
+func (c *Dialer) Output(ctx context.Context, cmd string) ([]byte, error) {
+	logrus.Debugf("%sDialer output executing...", dialerDebugIndent)
 	session, err := c.client.NewSession()
 	if err != nil {
 		return nil, err
 	}
 	defer session.Close()
-	logrus.Tracef("Dialer output executed")
-	return session.Output(cmd)
+	result, err := session.Output(cmd)
+	if err != nil {
+		return result, err
+	}
+	logrus.Debugf("%sDialer output executed", dialerDebugIndent)
+	return result, nil
 }
 
 // CombinedOutput func
-func (c *Dialer) CombinedOutput(cmd string) ([]byte, error) {
+func (c *Dialer) CombinedOutput(ctx context.Context, cmd string) ([]byte, error) {
+	logrus.Debugf("%sDialer combined output executing...", dialerDebugIndent)
 	session, err := c.client.NewSession()
 	if err != nil {
 		return nil, err
 	}
 	defer session.Close()
-	logrus.Tracef("Dialer combined output executed")
-	return session.CombinedOutput(cmd)
+	result, err := session.CombinedOutput(cmd)
+	if err != nil {
+		return result, err
+	}
+	logrus.Debugf("%sDialer combined output executed", dialerDebugIndent)
+	return result, nil
 }
 
-func (c *Dialer) runScript(cmd string) error {
+func (c *Dialer) runScript(ctx context.Context, cmd string) error {
+	logrus.Debugf("%sDialer run script executing...", dialerDebugIndent)
 	session, err := c.client.NewSession()
 	if err != nil {
 		return err
@@ -158,12 +253,15 @@ func (c *Dialer) runScript(cmd string) error {
 	defer session.Close()
 
 	//session.Stdin = cmd
-	session.Stdout = c.stdout
-	session.Stderr = c.stderr
+	//session.Stdout = c.stdout
+	//session.Stderr = c.stderr
 
 	if err := session.Shell(); err != nil {
 		return err
 	}
-	logrus.Tracef("Dialer run script executed")
-	return session.Wait()
+	if err := session.Wait(); err != nil {
+		return err
+	}
+	logrus.Debugf("%sDialer run script executed", dialerDebugIndent)
+	return nil
 }

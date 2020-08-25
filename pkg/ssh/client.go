@@ -1,7 +1,10 @@
 package ssh
 
 import (
+	"context"
 	"fmt"
+	"os"
+	"os/signal"
 	"strings"
 	"sync"
 
@@ -16,15 +19,20 @@ type Client struct {
 
 // NewClientFromYAML func
 func NewClientFromYAML(config string) (*Client, error) {
+	logrus.Debugf("Client creating...")
 	client := &Client{}
-	err := YAMLToInterface(config, client)
-	if err != nil {
+	if err := YAMLToInterface(config, client); err != nil {
 		return nil, err
 	}
-	return client, client.validate()
+	if err := client.validate(); err != nil {
+		return nil, err
+	}
+	logrus.Debugf("Client created")
+	return client, nil
 }
 
 func (c *Client) validate() error {
+	logrus.Debugf("Client validating...")
 	if c.Cmd == nil || len(c.Cmd) == 0 {
 		return fmt.Errorf("Validating client: cmd should be provided")
 	}
@@ -54,22 +62,26 @@ func (c *Client) validate() error {
 
 // Run func
 func (c *Client) Run() error {
+	logrus.Debugf("Client running...")
 	var wg sync.WaitGroup
-	wgErrors := make(chan error)
+
+	exit := make(chan os.Signal, 1)
+	signal.Notify(exit, os.Interrupt, os.Kill)
+
+	wgErrors, errStrings := newErrorByChan()
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
 	for _, host := range c.Hosts {
 		wg.Add(1)
 		go func(h Host) {
 			defer wg.Done()
-			err := h.Dial()
+			_, err := h.Run(ctx, c.Cmd)
 			if err != nil {
-				wgErrors <- err
-				return
-			}
-			defer h.Close()
-			out, err := h.CombinedOutput(c.Cmd)
-			fmt.Printf("%s\n", out)
-			if err != nil {
-				wgErrors <- err
+				message := err.Error()
+				if len(message) > 0 {
+					logrus.Debugf("%s[%s:%s] client run: %s", hostDebugIndent, h.Address, h.Port, message)
+					wgErrors <- &message
+				}
 			}
 		}(host)
 	}
@@ -79,18 +91,35 @@ func (c *Client) Run() error {
 		close(wgErrors)
 	}()
 
-	errStrings := []string{}
 	select {
-	case err := <-wgErrors:
-		if err == nil {
+	case errStr := <-wgErrors:
+		if errStr == nil {
 			break
 		}
-		errStrings = append(errStrings, err.Error())
+		errStrings = append(errStrings, *errStr)
+	case <-exit:
+		logrus.Info("Exit signal detected....trying to close properly...")
+		cancel()
+		<-wgErrors
+		fmt.Printf("killed\n")
+		return fmt.Errorf("Client run killed by user request")
 	}
 
 	if len(errStrings) > 0 {
-		return fmt.Errorf("%s", strings.Join(errStrings, "\n"))
+		fmt.Printf("error\n")
+		return fmt.Errorf("Client run failed:\n%s", strings.Join(errStrings, "\n"))
 	}
+	fmt.Printf("ok\n")
+	logrus.Debugf("Client runned")
+	return nil
+}
 
+// Close func
+func (c *Client) Close() error {
+	logrus.Debugf("Client closing...")
+	for _, host := range c.Hosts {
+		host.Close()
+	}
+	logrus.Debugf("Client closed")
 	return nil
 }

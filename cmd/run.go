@@ -73,7 +73,6 @@ func RunCommand() *cli.Command {
 // RunFromCli func
 func RunFromCli(ctx *cli.Context) error {
 	logrus.Infof("Running ssh-client version: %v", ctx.App.Version)
-	return fmt.Errorf("%s", ctx.String("ssh_key_path"))
 	output := map[string]interface{}{}
 	configFile := ctx.String("config")
 	if len(configFile) > 0 {
@@ -120,5 +119,6 @@ func Run(params map[string]interface{}) error {
 	if err != nil {
 		return err
 	}
+	defer client.Close()
 	return client.Run()
 }

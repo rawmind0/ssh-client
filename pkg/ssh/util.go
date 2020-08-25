@@ -9,6 +9,17 @@ import (
 
 const separator = ","
 
+func newErrorByChan() (chan *string, []string) {
+	wgErrors := make(chan *string)
+	errStrings := []string{}
+
+	return wgErrors, errStrings
+}
+
+func stringsToLines(input []string) string {
+	return strings.Join(input, "\n")
+}
+
 // SplitBySep func
 func SplitBySep(s string) []interface{} {
 	if len(s) == 0 {
