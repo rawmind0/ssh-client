@@ -164,12 +164,13 @@ func (c *Client) RunCmd(cmd []string) error {
 
 // Run func
 func (c *Client) Run() error {
+	logrus.Debugf("Client running...")
 	logrus.Debugf("Client run locking...")
 	c.runSync.Lock()
-	defer logrus.Debugf("Client run unlocked")
-	defer c.runSync.Unlock()
-	logrus.Debugf("Client running...")
-	return c.run(c.config.getCmd())
+	cmd := c.config.getCmd()
+	c.runSync.Unlock()
+	logrus.Debugf("Client run unlocked")
+	return c.run(cmd)
 }
 
 func (c *Client) run(cmd []string) error {
