@@ -3,17 +3,17 @@ ssh-client
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/rawmind0/ssh-client)](https://goreportcard.com/report/github.com/rawmind0/ssh-client)
 
-ssh-client is a tool to execute commands on multiple hosts by ssh. It can be used as go module in your app or executing it from the binary.
+ssh-client is a tool to execute commands concurrently on multiple hosts by ssh. It can be used as go module in your app or executing it from the binary.
 
 ## Building
 
-* To build the provider and 
+* To build the provider
 
 `make`
 
-
 ## Running
 
+* ssh-cli tool
 
 ```
 $ ./ssh-client -h
@@ -40,6 +40,8 @@ GLOBAL OPTIONS:
    --version, -v  print the version (default: false)
 ```
 
+* ssh-cli run command
+
 ```
 ./ssh-client run -h
 NAME:
@@ -59,6 +61,7 @@ OPTIONS:
    --ssh_key value           SSH key to auth
    --ssh_key_pass value      SSH key passphrase to auth. Optional
    --ssh_key_path value      SSH key path to auth. Optional
+   --timeout value           Command execution timeout interval (default: "300s")
    --help, -h                show help (default: false)
 ```
 
@@ -77,6 +80,7 @@ The tool can be configured in different ways:
    --ssh_key value           SSH key to auth
    --ssh_key_pass value      SSH key passphrase to auth. Optional
    --ssh_key_path value      SSH key path to auth (default: "${HOME_DIR}/.ssh/id_rsa")
+   --timeout value           Command execution timeout interval (default: "300s")
 ```
 
 * using config file `--config file`. The config file should be in yaml format:
@@ -97,14 +101,16 @@ cmd:
   - cmd2
   ...
   - cmdN
+timeout: string
 ```
 
 ## Authenticating
 
 The tool can ssh auth in different ways:
-* Using password, `--password value`
+* Using ssh key, `--ssh_key key` and optionally `--ssh_key_pass value` if key requires password 
+* Using ssh key path, `--ssh_key_path file` and optionally `--ssh_key_pass value` if key requires password 
 * Using ssh key agent, `--ssh_agent_auth`
-* Using ssh key, `--ssh_key key` or `--ssh_key_path file` and `--ssh_key_pass value`. 
+* Using password, `--password value`
 
 ## License
 Copyright (c) 2019 [Rancher Labs, Inc.](http://rancher.com)

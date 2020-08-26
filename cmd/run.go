@@ -60,6 +60,11 @@ func RunCommand() *cli.Command {
 			Usage: "SSH key path to auth",
 			Value: ssh.InitKeyPath(),
 		},
+		&cli.StringFlag{
+			Name:  "timeout",
+			Usage: "Command execution timeout interval",
+			Value: ssh.DefaultTimeout,
+		},
 	}
 
 	return &cli.Command{
@@ -73,7 +78,9 @@ func RunCommand() *cli.Command {
 // RunFromCli func
 func RunFromCli(ctx *cli.Context) error {
 	logrus.Infof("Running ssh-client version: %v", ctx.App.Version)
-	output := map[string]interface{}{}
+	output := map[string]interface{}{
+		"timeout": ctx.String("timeout"),
+	}
 	configFile := ctx.String("config")
 	if len(configFile) > 0 {
 		configByte, err := ioutil.ReadFile(configFile)

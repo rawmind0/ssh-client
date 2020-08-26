@@ -45,12 +45,15 @@ func InitKeyPath() string {
 
 // Dial func
 func (h *Host) Dial(ctx context.Context) error {
+	if h.dialer != nil {
+		return nil
+	}
 	logrus.Debugf("%s[%s:%s] host dialing", hostDebugIndent, h.Address, h.Port)
 	if len(h.User) == 0 {
 		return fmt.Errorf("[%s:%s] host dialing: user is nil", h.Address, h.Port)
 	}
 
-	dialer, err := NewDialer(h.Address+":"+h.Port, h.User, h.Pass, h.SSHKey, h.SSHKeyPass, h.SSHAgentAuth)
+	dialer, err := NewDialer(ctx, h.Address+":"+h.Port, h.User, h.Pass, h.SSHKey, h.SSHKeyPass, h.SSHAgentAuth)
 	if err != nil {
 		return fmt.Errorf("[%s:%s] host dialing: %v", h.Address, h.Port, err)
 	}
@@ -76,7 +79,7 @@ func (h *Host) validate() error {
 		}
 		keyByte, err := ioutil.ReadFile(h.SSHKeyPath)
 		if err != nil {
-			return fmt.Errorf("[%s:%s] host validating: Reading user ssh key file: %v", h.Address, h.Port, err)
+			return fmt.Errorf("[%s:%s] host validating: Reading user ssh key file: %s", h.Address, h.Port, err)
 		}
 		h.SSHKey = string(keyByte)
 	}
@@ -91,7 +94,7 @@ func (h *Host) Close() error {
 		err := h.dialer.Close()
 		if err != nil {
 			logrus.Errorf("%sDialer close failed", dialerDebugIndent)
-			return nil
+			return fmt.Errorf("[%s:%s] host closing: %v", h.Address, h.Port, err)
 		}
 	}
 	logrus.Debugf("%s[%s:%s] host closed", hostDebugIndent, h.Address, h.Port)
@@ -109,7 +112,7 @@ func (h *Host) Run(ctx context.Context, cmds []string, kind string) ([]byte, err
 	if len(cmd) == 0 {
 		return nil, fmt.Errorf("[%s:%s] run: Command is nil", h.Address, h.Port)
 	}
-	data, err := h.dialer.Run(ctx, cmd, kind)
+	data, err := h.dialer.run(ctx, cmd, kind)
 	if err != nil {
 		return data, fmt.Errorf("[%s:%s] host run failed:\n%s", h.Address, h.Port, err)
 	}

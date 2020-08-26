@@ -7,30 +7,46 @@ import (
 	"os/signal"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
 
+// DefaultTimeout const
+const DefaultTimeout = "300s"
+
 // Client struct
 type Client struct {
-	Hosts []Host   `yaml:"hosts" json:"hosts,omitempty"`
-	Cmd   []string `yaml:"cmd" json:"cmd,omitempty"`
+	Hosts   []Host   `yaml:"hosts" json:"hosts,omitempty"`
+	Cmd     []string `yaml:"cmd" json:"cmd,omitempty"`
+	Timeout string   `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	timeout time.Duration
 }
 
 // NewClientFromYAML func
 func NewClientFromYAML(config string) (*Client, error) {
-	logrus.Debugf("Client creating...")
-	client := &Client{}
+	logrus.Debugf("New client creating...")
+	client := &Client{
+		Timeout: DefaultTimeout,
+	}
 	if err := YAMLToInterface(config, client); err != nil {
 		return nil, err
 	}
 	if err := client.validate(); err != nil {
 		return nil, err
 	}
-	logrus.Debugf("Client created")
+	logrus.Debugf("New client created")
 	return client, nil
 }
 
+func (c *Client) parseTimeout() error {
+	duration, err := time.ParseDuration(c.Timeout)
+	if err != nil {
+		return fmt.Errorf("parsing timeout: %v", err)
+	}
+	c.timeout = duration
+	return nil
+}
 func (c *Client) validate() error {
 	logrus.Debugf("Client validating...")
 	if c.Cmd == nil || len(c.Cmd) == 0 {
@@ -39,6 +55,10 @@ func (c *Client) validate() error {
 	if c.Hosts == nil || len(c.Hosts) == 0 {
 		return fmt.Errorf("Validating client: hosts should be provided")
 	}
+	if err := c.parseTimeout(); err != nil {
+		return fmt.Errorf("Validating client: %v", err)
+	}
+
 	errStrings := []string{}
 	hostIDS := make(map[string]int, len(c.Hosts))
 	for i := range c.Hosts {
@@ -60,26 +80,39 @@ func (c *Client) validate() error {
 	return nil
 }
 
+// RunCmd func
+func (c *Client) RunCmd(cmd []string) error {
+	logrus.Debugf("Client running cmd...")
+	c.Cmd = cmd
+	err := c.Run()
+	if err != nil {
+		return err
+	}
+	logrus.Debugf("Client cmd runned")
+	return nil
+}
+
 // Run func
 func (c *Client) Run() error {
 	logrus.Debugf("Client running...")
 	var wg sync.WaitGroup
 
+	cmd := c.Cmd
 	exit := make(chan os.Signal, 1)
 	signal.Notify(exit, os.Interrupt, os.Kill)
 
 	wgErrors, errStrings := newErrorByChan()
-	ctx := context.Background()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	defer cancel()
 	for _, host := range c.Hosts {
 		wg.Add(1)
 		go func(h Host) {
 			defer wg.Done()
-			_, err := h.Run(ctx, c.Cmd, dialerRunKindCombined)
+			_, err := h.Run(ctx, cmd, dialerRunKindCombined)
 			if err != nil {
 				message := err.Error()
 				if len(message) > 0 {
-					logrus.Debugf("%s[%s:%s] client run: %s", hostDebugIndent, h.Address, h.Port, message)
+					logrus.Debugf("%s%s", hostDebugIndent, message)
 					wgErrors <- &message
 				}
 			}
@@ -104,13 +137,18 @@ running:
 			cancel()
 			<-wgErrors
 			fmt.Printf("killed\n")
-			return fmt.Errorf("Client run killed by user request")
+			return fmt.Errorf("Client killed by user request: %v", ctx.Err())
+		case <-ctx.Done():
+			logrus.Errorf("Client run context timeout: %s", c.Timeout)
+			<-wgErrors
+			fmt.Printf("killed\n")
+			return fmt.Errorf("Client run context cancelled: %v", ctx.Err())
 		}
 	}
 
 	if len(errStrings) > 0 {
 		fmt.Printf("error\n")
-		return fmt.Errorf("Client run failed:\n%s", strings.Join(errStrings, "\n"))
+		return fmt.Errorf("Client run failed:\n%s", stringsToLines(errStrings))
 	}
 	fmt.Printf("ok\n")
 	logrus.Debugf("Client runned")
@@ -120,8 +158,15 @@ running:
 // Close func
 func (c *Client) Close() error {
 	logrus.Debugf("Client closing...")
+	errStrings := []string{}
 	for _, host := range c.Hosts {
-		host.Close()
+		if err := host.Close(); err != nil {
+			errStrings = append(errStrings, err.Error())
+		}
+	}
+	if len(errStrings) > 0 {
+		fmt.Printf("error\n")
+		return fmt.Errorf("Client close failed:\n%s", stringsToLines(errStrings))
 	}
 	logrus.Debugf("Client closed")
 	return nil
