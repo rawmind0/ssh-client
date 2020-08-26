@@ -53,6 +53,7 @@ USAGE:
 OPTIONS:
    --config value, -c value  Specify config YAML file [$SSH_CLIENT_NODES]
    --cmd value               Command to run. Multiple entry allowed sepparated by ,
+   --cmd_file value          Script files to run. Multiple entry allowed sepparated by ,
    --host value              Host ip to connect. Multiple entry allowed sepparated by ,
    --port value, -p value    Host port to connect (default: "22")
    --user value, -u value    Username to auth (default: "rancher")
@@ -72,6 +73,7 @@ The tool can be configured in different ways:
 * using run arguments:
 ```
    --cmd value               Command to run. Multiple entry allowed sepparated by ,
+   --cmd_file value          Script files to run. Multiple entry allowed sepparated by ,
    --host value              Host ip to connect. Multiple entry allowed sepparated by ,
    --port value, -p value    Host port to connect (default: "22")
    --user value, -u value    Username to auth (default: "rancher")
@@ -98,9 +100,12 @@ hosts:
   ssh_cert_path: string
 cmd: 
   - cmd1
-  - cmd2
   ...
   - cmdN
+cmd_file:
+  - file1
+  ...
+  - fileN 
 timeout: string
 ```
 

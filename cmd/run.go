@@ -23,6 +23,10 @@ func RunCommand() *cli.Command {
 			Usage: "Command to run. Multiple entry allowed sepparated by ,",
 		},
 		&cli.StringFlag{
+			Name:  "cmd_file",
+			Usage: "Script files to run. Multiple entry allowed sepparated by ,",
+		},
+		&cli.StringFlag{
 			Name:  "host",
 			Usage: "Host ip to connect. Multiple entry allowed sepparated by ,",
 		},
@@ -108,6 +112,9 @@ func RunFromCli(ctx *cli.Context) error {
 	}
 	if cmd := ctx.String("cmd"); len(cmd) > 0 {
 		output["cmd"] = ssh.SplitBySep(cmd)
+	}
+	if cmdFile := ctx.String("cmd_file"); len(cmdFile) > 0 {
+		output["cmd_file"] = ssh.SplitBySep(cmdFile)
 	}
 	for i := range hosts {
 		params["address"] = hosts[i]

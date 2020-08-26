@@ -3,6 +3,7 @@ package ssh
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/signal"
 	"strings"
@@ -19,6 +20,7 @@ const DefaultTimeout = "300s"
 type Client struct {
 	Hosts   []Host   `yaml:"hosts" json:"hosts,omitempty"`
 	Cmd     []string `yaml:"cmd" json:"cmd,omitempty"`
+	CmdFile []string `yaml:"cmd_file,omitempty" json:"cmd_file,omitempty"`
 	Timeout string   `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 	timeout time.Duration
 }
@@ -49,6 +51,13 @@ func (c *Client) parseTimeout() error {
 }
 func (c *Client) validate() error {
 	logrus.Debugf("Client validating...")
+	for _, cmdFile := range c.CmdFile {
+		cmdBytes, err := ioutil.ReadFile(cmdFile)
+		if err != nil {
+			return fmt.Errorf("Validating client: Reading config file: %v", err)
+		}
+		c.Cmd = append(c.Cmd, string(cmdBytes))
+	}
 	if c.Cmd == nil || len(c.Cmd) == 0 {
 		return fmt.Errorf("Validating client: cmd should be provided")
 	}
