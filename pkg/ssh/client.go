@@ -16,67 +16,73 @@ import (
 // DefaultTimeout const
 const DefaultTimeout = "300s"
 
-// Client struct
-type Client struct {
+// ClientConfig struct
+type ClientConfig struct {
 	Hosts   []Host   `yaml:"hosts" json:"hosts,omitempty"`
 	Cmd     []string `yaml:"cmd" json:"cmd,omitempty"`
 	CmdFile []string `yaml:"cmd_file,omitempty" json:"cmd_file,omitempty"`
 	Timeout string   `yaml:"timeout,omitempty" json:"timeout,omitempty"`
-	timeout time.Duration
-	runSync *sync.Mutex
 }
 
-// NewClientFromYAML func
-func NewClientFromYAML(config string) (*Client, error) {
-	logrus.Debugf("New client creating...")
-	client := &Client{
+// NewClientConfigFromYAML func
+func NewClientConfigFromYAML(config string) (*ClientConfig, error) {
+	logrus.Debugf("New client config creating...")
+	clientConfig := &ClientConfig{
 		Timeout: DefaultTimeout,
-		runSync: &sync.Mutex{},
 	}
-	if err := YAMLToInterface(config, client); err != nil {
+	if err := YAMLToInterface(config, clientConfig); err != nil {
 		return nil, err
 	}
-	if err := client.validate(); err != nil {
-		return nil, err
-	}
-	logrus.Debugf("New client created")
-	return client, nil
+	return clientConfig, nil
 }
 
-func (c *Client) parseTimeout() error {
-	duration, err := time.ParseDuration(c.Timeout)
-	if err != nil {
-		return fmt.Errorf("parsing timeout: %v", err)
-	}
-	c.timeout = duration
-	return nil
+func (c *ClientConfig) setCmd(config []string) {
+	c.Cmd = config
 }
-func (c *Client) validate() error {
-	logrus.Debugf("Client validating...")
-	for _, cmdFile := range c.CmdFile {
+
+func (c *ClientConfig) getHosts() []Host {
+	return c.Hosts
+}
+
+func (c *ClientConfig) getCmd() []string {
+	return c.Cmd
+}
+
+func (c *ClientConfig) getHCmdFile() []string {
+	return c.CmdFile
+}
+
+func (c *ClientConfig) getTimeout() string {
+	return c.Timeout
+}
+
+func (c *ClientConfig) validate() error {
+	logrus.Debugf("Config validating...")
+	for _, cmdFile := range c.getHCmdFile() {
 		cmdBytes, err := ioutil.ReadFile(cmdFile)
 		if err != nil {
-			return fmt.Errorf("Validating client: Reading config file: %v", err)
+			return fmt.Errorf("Reading config file: %v", err)
 		}
 		c.Cmd = append(c.Cmd, string(cmdBytes))
 	}
-	if c.Cmd == nil || len(c.Cmd) == 0 {
-		return fmt.Errorf("Validating client: cmd should be provided")
+	if c.Cmd == nil || len(c.getCmd()) == 0 {
+		return fmt.Errorf("cmd should be provided")
 	}
-	if c.Hosts == nil || len(c.Hosts) == 0 {
-		return fmt.Errorf("Validating client: hosts should be provided")
+	hostList := c.getHosts()
+	if c.Hosts == nil || len(hostList) == 0 {
+		return fmt.Errorf("hosts should be provided")
 	}
-	if err := c.parseTimeout(); err != nil {
-		return fmt.Errorf("Validating client: %v", err)
+	if _, err := time.ParseDuration(c.Timeout); err != nil {
+		return fmt.Errorf("parinsg timeout %v", err)
 	}
 
 	errStrings := []string{}
-	hostIDS := make(map[string]int, len(c.Hosts))
-	for i := range c.Hosts {
-		err := c.Hosts[i].validate()
-		hostID := c.Hosts[i].Address + ":" + c.Hosts[i].Port
+	hostIDS := make(map[string]int, len(hostList))
+	for i := range hostList {
+		err := hostList[i].validate()
+		hostID := hostList[i].Address + ":" + hostList[i].Port
 		if err != nil || hostIDS[hostID] > 0 {
-			errLine := "[" + hostID + "] Validating client: duplicated host"
+			errLine := "[" + hostID + "] Validating config: duplicated host"
 			if err != nil {
 				errLine = "[" + hostID + "]" + err.Error()
 			}
@@ -87,7 +93,66 @@ func (c *Client) validate() error {
 	if len(errStrings) > 0 {
 		return fmt.Errorf("%s", strings.Join(errStrings, "\n"))
 	}
-	logrus.Debugf("Client validated")
+	logrus.Debugf("Config validated")
+	return nil
+}
+
+type Client struct {
+	config  *ClientConfig
+	timeout time.Duration
+	runSync *sync.Mutex
+}
+
+// NewClientFromYAML func
+func NewClientFromYAML(config string) (*Client, error) {
+	logrus.Debugf("New client creating...")
+	clientConfig, err := NewClientConfigFromYAML(config)
+	if err != nil {
+		return nil, err
+	}
+	client := &Client{
+		config:  clientConfig,
+		runSync: &sync.Mutex{},
+	}
+	if err := client.validate(); err != nil {
+		return nil, err
+	}
+	logrus.Debugf("New client created")
+	return client, nil
+}
+
+func (c *Client) SetCmd(config string) error {
+	logrus.Debugf("Cmd setting...")
+	clientConfig, err := NewClientConfigFromYAML(config)
+	if err != nil {
+		return err
+	}
+	clientConfig = c.config
+	err = c.config.validate()
+	if err != nil {
+		return fmt.Errorf("Setting cmd: %v", err)
+	}
+
+	logrus.Debugf("Setting cmd locking...")
+	c.runSync.Lock()
+	c.config.setCmd(clientConfig.Cmd)
+	c.runSync.Unlock()
+	logrus.Debugf("Setting cmd unlocked")
+
+	logrus.Debugf("Cmd set")
+	return nil
+}
+
+func (c *Client) validate() error {
+	err := c.config.validate()
+	if err != nil {
+		return fmt.Errorf("Validating config: %v", err)
+	}
+	duration, err := time.ParseDuration(c.config.getTimeout())
+	if err != nil {
+		return fmt.Errorf("Validating client: parsing timeout: %v", err)
+	}
+	c.timeout = duration
 	return nil
 }
 
@@ -104,7 +169,7 @@ func (c *Client) Run() error {
 	defer logrus.Debugf("Client run unlocked")
 	defer c.runSync.Unlock()
 	logrus.Debugf("Client running...")
-	return c.run(c.Cmd)
+	return c.run(c.config.getCmd())
 }
 
 func (c *Client) run(cmd []string) error {
@@ -118,7 +183,7 @@ func (c *Client) run(cmd []string) error {
 	wgErrors, errStrings := newErrorByChan()
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
-	for _, host := range c.Hosts {
+	for _, host := range c.config.getHosts() {
 		wg.Add(1)
 		go func(h Host) {
 			defer wg.Done()
@@ -153,7 +218,7 @@ running:
 			fmt.Printf("killed\n")
 			return fmt.Errorf("Client killed by user request: %v", ctx.Err())
 		case <-ctx.Done():
-			logrus.Errorf("Client run context timeout: %s", c.Timeout)
+			logrus.Errorf("Client run context timeout: %s", c.config.getTimeout())
 			<-wgErrors
 			fmt.Printf("killed\n")
 			return fmt.Errorf("Client run context cancelled: %v", ctx.Err())
@@ -173,7 +238,7 @@ running:
 func (c *Client) Close() error {
 	logrus.Debugf("Client closing...")
 	errStrings := []string{}
-	for _, host := range c.Hosts {
+	for _, host := range c.config.getHosts() {
 		if err := host.Close(); err != nil {
 			errStrings = append(errStrings, err.Error())
 		}
