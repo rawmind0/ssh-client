@@ -75,7 +75,7 @@ func (c *Client) Run() error {
 		wg.Add(1)
 		go func(h Host) {
 			defer wg.Done()
-			_, err := h.Run(ctx, c.Cmd)
+			_, err := h.Run(ctx, c.Cmd, dialerRunKindCombined)
 			if err != nil {
 				message := err.Error()
 				if len(message) > 0 {
@@ -91,18 +91,21 @@ func (c *Client) Run() error {
 		close(wgErrors)
 	}()
 
-	select {
-	case errStr := <-wgErrors:
-		if errStr == nil {
-			break
+running:
+	for {
+		select {
+		case errStr := <-wgErrors:
+			if errStr == nil {
+				break running
+			}
+			errStrings = append(errStrings, *errStr)
+		case <-exit:
+			logrus.Info("Exit signal detected....trying to close properly...")
+			cancel()
+			<-wgErrors
+			fmt.Printf("killed\n")
+			return fmt.Errorf("Client run killed by user request")
 		}
-		errStrings = append(errStrings, *errStr)
-	case <-exit:
-		logrus.Info("Exit signal detected....trying to close properly...")
-		cancel()
-		<-wgErrors
-		fmt.Printf("killed\n")
-		return fmt.Errorf("Client run killed by user request")
 	}
 
 	if len(errStrings) > 0 {

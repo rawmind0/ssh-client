@@ -11,7 +11,12 @@ import (
 	"golang.org/x/crypto/ssh/agent"
 )
 
-const dialerDebugIndent = "    "
+const (
+	dialerDebugIndent     = "    "
+	dialerRunKindCmd      = "cmd"
+	dialerRunKindOutput   = "output"
+	dialerRunKindCombined = "combined"
+)
 
 // Dialer struct
 type Dialer struct {
@@ -136,11 +141,11 @@ func (c *Dialer) Run(ctx context.Context, cmd, kind string) ([]byte, error) {
 	go func() {
 		var err error
 		switch kind {
-		case "cmd":
+		case dialerRunKindCmd:
 			err = session.Run(cmd)
-		case "output":
+		case dialerRunKindOutput:
 			data, err = session.Output(cmd)
-		case "combined":
+		default:
 			data, err = session.CombinedOutput(cmd)
 			if err != nil {
 				err = fmt.Errorf("%s", string(data))
@@ -172,96 +177,4 @@ func (c *Dialer) Run(ctx context.Context, cmd, kind string) ([]byte, error) {
 	}
 	logrus.Debugf("%sDialer run executed", dialerDebugIndent)
 	return data, nil
-}
-
-// Cmd func
-func (c *Dialer) Cmd(ctx context.Context, cmd string) error {
-	logrus.Debugf("%sDialer cmd executing...", dialerDebugIndent)
-	session, err := c.client.NewSession()
-	if err != nil {
-		return err
-	}
-	defer session.Close()
-
-	wgErrors, errStrings := newErrorByChan()
-	go func() {
-		if err := session.Run(cmd); err != nil {
-			message := err.Error()
-			if len(message) > 0 {
-				wgErrors <- &message
-			}
-		}
-		close(wgErrors)
-	}()
-
-	select {
-	case <-ctx.Done():
-		logrus.Debugf("%sDialer cmd killed", dialerDebugIndent)
-		session.Signal(ssh.SIGKILL)
-		break
-	case errStr := <-wgErrors:
-		if errStr == nil {
-			break
-		}
-		errStrings = append(errStrings, *errStr)
-	}
-	if len(errStrings) > 0 {
-		return fmt.Errorf("Dialer cmd execution failed:\n%s", stringsToLines(errStrings))
-	}
-	logrus.Debugf("%sDialer cmd executed", dialerDebugIndent)
-	return nil
-}
-
-// Output func
-func (c *Dialer) Output(ctx context.Context, cmd string) ([]byte, error) {
-	logrus.Debugf("%sDialer output executing...", dialerDebugIndent)
-	session, err := c.client.NewSession()
-	if err != nil {
-		return nil, err
-	}
-	defer session.Close()
-	result, err := session.Output(cmd)
-	if err != nil {
-		return result, err
-	}
-	logrus.Debugf("%sDialer output executed", dialerDebugIndent)
-	return result, nil
-}
-
-// CombinedOutput func
-func (c *Dialer) CombinedOutput(ctx context.Context, cmd string) ([]byte, error) {
-	logrus.Debugf("%sDialer combined output executing...", dialerDebugIndent)
-	session, err := c.client.NewSession()
-	if err != nil {
-		return nil, err
-	}
-	defer session.Close()
-	result, err := session.CombinedOutput(cmd)
-	if err != nil {
-		return result, err
-	}
-	logrus.Debugf("%sDialer combined output executed", dialerDebugIndent)
-	return result, nil
-}
-
-func (c *Dialer) runScript(ctx context.Context, cmd string) error {
-	logrus.Debugf("%sDialer run script executing...", dialerDebugIndent)
-	session, err := c.client.NewSession()
-	if err != nil {
-		return err
-	}
-	defer session.Close()
-
-	//session.Stdin = cmd
-	//session.Stdout = c.stdout
-	//session.Stderr = c.stderr
-
-	if err := session.Shell(); err != nil {
-		return err
-	}
-	if err := session.Wait(); err != nil {
-		return err
-	}
-	logrus.Debugf("%sDialer run script executed", dialerDebugIndent)
-	return nil
 }

@@ -20,16 +20,11 @@ func stringsToLines(input []string) string {
 	return strings.Join(input, "\n")
 }
 
-// SplitBySep func
-func SplitBySep(s string) []interface{} {
-	if len(s) == 0 {
-		return nil
-	}
-
-	return toArrayInterface(strings.Split(s, separator))
+func stringsToCmd(input []string) string {
+	return strings.Join(input, " && ")
 }
 
-func toArrayInterface(in []string) []interface{} {
+func stringsToInterface(in []string) []interface{} {
 	out := make([]interface{}, len(in))
 	for i, v := range in {
 		out[i] = v
@@ -37,14 +32,13 @@ func toArrayInterface(in []string) []interface{} {
 	return out
 }
 
-// YAMLToMapInterface func
-func YAMLToMapInterface(in string) (map[string]interface{}, error) {
-	out := make(map[string]interface{})
-	err := yaml.Unmarshal([]byte(in), &out)
-	if err != nil {
-		return nil, err
+// SplitBySep func
+func SplitBySep(s string) []interface{} {
+	if len(s) == 0 {
+		return nil
 	}
-	return out, err
+
+	return stringsToInterface(strings.Split(s, separator))
 }
 
 // YAMLToInterface func
@@ -69,36 +63,12 @@ func GhodssYAMLToMapInterface(in string) (map[string]interface{}, error) {
 	return out, err
 }
 
-// GhodssYAMLToInterface func
-func GhodssYAMLToInterface(in string, out interface{}) error {
-	if out == nil {
-		return nil
-	}
-	err := ghodssyaml.Unmarshal([]byte(in), out)
-	if err != nil {
-		return err
-	}
-	return err
-}
-
 // InterfaceToYAML func
 func InterfaceToYAML(in interface{}) (string, error) {
 	if in == nil {
 		return "", nil
 	}
 	out, err := yaml.Marshal(in)
-	if err != nil {
-		return "", err
-	}
-	return string(out), err
-}
-
-// InterfaceToGhodssYAML func
-func InterfaceToGhodssYAML(in interface{}) (string, error) {
-	if in == nil {
-		return "", nil
-	}
-	out, err := ghodssyaml.Marshal(in)
 	if err != nil {
 		return "", err
 	}

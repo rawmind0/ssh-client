@@ -99,13 +99,13 @@ func (h *Host) Close() error {
 }
 
 // Run func
-func (h *Host) Run(ctx context.Context, cmds []string) ([]byte, error) {
+func (h *Host) Run(ctx context.Context, cmds []string, kind string) ([]byte, error) {
 	logrus.Debugf("%s[%s:%s] host running...", hostDebugIndent, h.Address, h.Port)
 	err := h.Dial(ctx)
 	if err != nil {
 		return nil, err
 	}
-	cmd := stringsToLines(cmds)
+	cmd := stringsToCmd(cmds)
 	if len(cmd) == 0 {
 		return nil, fmt.Errorf("[%s:%s] run: Command is nil", h.Address, h.Port)
 	}
@@ -113,7 +113,7 @@ func (h *Host) Run(ctx context.Context, cmds []string) ([]byte, error) {
 	wgErrors, errStrings := newErrorByChan()
 	go func() {
 		var err error
-		data, err = h.dialer.Run(ctx, cmd, "combined")
+		data, err = h.dialer.Run(ctx, cmd, kind)
 		if err != nil {
 			message := err.Error()
 			if len(message) > 0 {
@@ -131,65 +131,9 @@ func (h *Host) Run(ctx context.Context, cmds []string) ([]byte, error) {
 		}
 		errStrings = append(errStrings, *errStr)
 	}
-
 	if len(errStrings) > 0 {
-		return data, fmt.Errorf("host run failed:\n%s", stringsToLines(errStrings))
+		return data, fmt.Errorf("[%s:%s] host run failed:\n%s", h.Address, h.Port, stringsToLines(errStrings))
 	}
-
 	logrus.Debugf("%s[%s:%s] host runned", hostDebugIndent, h.Address, h.Port)
 	return data, nil
-}
-
-// Cmd func
-func (h *Host) Cmd(ctx context.Context, cmds []string) error {
-	logrus.Debugf("%s[%s:%s] cmd executing...", hostDebugIndent, h.Address, h.Port)
-	cmd := stringsToLines(cmds)
-	if len(cmd) == 0 {
-		return fmt.Errorf("[%s:%s] cmd: Command is nil", h.Address, h.Port)
-	}
-	err := h.dialer.Cmd(ctx, cmd)
-	if err != nil {
-		logrus.Errorf("%sDialer cmd execution failed", dialerDebugIndent)
-		return fmt.Errorf("[%s:%s] cmd: %v", h.Address, h.Port, err)
-	}
-	logrus.Debugf("%s[%s:%s] cmd executed", hostDebugIndent, h.Address, h.Port)
-	return nil
-}
-
-// Output func
-func (h *Host) Output(ctx context.Context, cmds []string) ([]byte, error) {
-	logrus.Debugf("%s[%s:%s] output executing...", hostDebugIndent, h.Address, h.Port)
-	cmd := ""
-	for i := range cmds {
-		cmd = cmd + cmds[i] + "\n"
-	}
-	if len(cmd) == 0 {
-		return nil, fmt.Errorf("[%s:%s] output: Command is nil", h.Address, h.Port)
-	}
-	out, err := h.dialer.Output(ctx, cmd)
-	if err != nil {
-		logrus.Errorf("%sDialer output execution failed", dialerDebugIndent)
-		return nil, fmt.Errorf("[%s:%s] output: %v", h.Address, h.Port, err)
-	}
-	logrus.Debugf("%s[%s:%s] output executed", hostDebugIndent, h.Address, h.Port)
-	return out, nil
-}
-
-// CombinedOutput func
-func (h *Host) CombinedOutput(ctx context.Context, cmds []string) ([]byte, error) {
-	logrus.Debugf("%s[%s:%s] combined output executing...", hostDebugIndent, h.Address, h.Port)
-	cmd := ""
-	for i := range cmds {
-		cmd = cmd + cmds[i] + "\n"
-	}
-	if len(cmd) == 0 {
-		return nil, fmt.Errorf("[%s:%s] combined output: Command is nil", h.Address, h.Port)
-	}
-	out, err := h.dialer.CombinedOutput(ctx, cmd)
-	if err != nil {
-		logrus.Errorf("%sDialer combined output execution failed", dialerDebugIndent)
-		return nil, fmt.Errorf("[%s:%s] combined output: \n%s", h.Address, h.Port, string(out))
-	}
-	logrus.Debugf("%s[%s:%s] combined output executed", hostDebugIndent, h.Address, h.Port)
-	return out, nil
 }
