@@ -23,21 +23,6 @@ type Dialer struct {
 	client *ssh.Client
 }
 
-// NewDialerWithPasswd func
-func NewDialerWithPasswd(addr, user, pass string) (*Dialer, error) {
-	return NewDialer(addr, user, pass, "", "", false)
-}
-
-// NewDialerWithKey func
-func NewDialerWithKey(addr, user, key, keypass string) (*Dialer, error) {
-	return NewDialer(addr, user, "", key, keypass, false)
-}
-
-// NewDialerWithKeyAgent func
-func NewDialerWithKeyAgent(addr, user string) (*Dialer, error) {
-	return NewDialer(addr, user, "", "", "", true)
-}
-
 // NewDialer func
 func NewDialer(addr, user, pass, key, keyPass string, keyAgent bool) (*Dialer, error) {
 	if len(addr) == 0 {

@@ -109,31 +109,11 @@ func (h *Host) Run(ctx context.Context, cmds []string, kind string) ([]byte, err
 	if len(cmd) == 0 {
 		return nil, fmt.Errorf("[%s:%s] run: Command is nil", h.Address, h.Port)
 	}
-	var data []byte
-	wgErrors, errStrings := newErrorByChan()
-	go func() {
-		var err error
-		data, err = h.dialer.Run(ctx, cmd, kind)
-		if err != nil {
-			message := err.Error()
-			if len(message) > 0 {
-				logrus.Debugf("%s[%s:%s] %s", hostDebugIndent, h.Address, h.Port, message)
-				wgErrors <- &message
-			}
-		}
-		close(wgErrors)
-	}()
+	data, err := h.dialer.Run(ctx, cmd, kind)
+	if err != nil {
+		return data, fmt.Errorf("[%s:%s] host run failed:\n%s", h.Address, h.Port, err)
+	}
 
-	select {
-	case errStr := <-wgErrors:
-		if errStr == nil {
-			break
-		}
-		errStrings = append(errStrings, *errStr)
-	}
-	if len(errStrings) > 0 {
-		return data, fmt.Errorf("[%s:%s] host run failed:\n%s", h.Address, h.Port, stringsToLines(errStrings))
-	}
 	logrus.Debugf("%s[%s:%s] host runned", hostDebugIndent, h.Address, h.Port)
 	return data, nil
 }
