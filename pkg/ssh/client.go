@@ -23,6 +23,7 @@ type Client struct {
 	CmdFile []string `yaml:"cmd_file,omitempty" json:"cmd_file,omitempty"`
 	Timeout string   `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 	timeout time.Duration
+	runSync *sync.Mutex
 }
 
 // NewClientFromYAML func
@@ -30,6 +31,7 @@ func NewClientFromYAML(config string) (*Client, error) {
 	logrus.Debugf("New client creating...")
 	client := &Client{
 		Timeout: DefaultTimeout,
+		runSync: &sync.Mutex{},
 	}
 	if err := YAMLToInterface(config, client); err != nil {
 		return nil, err
@@ -92,21 +94,24 @@ func (c *Client) validate() error {
 // RunCmd func
 func (c *Client) RunCmd(cmd []string) error {
 	logrus.Debugf("Client running cmd...")
-	c.Cmd = cmd
-	err := c.Run()
-	if err != nil {
-		return err
-	}
-	logrus.Debugf("Client cmd runned")
-	return nil
+	return c.run(cmd)
 }
 
 // Run func
 func (c *Client) Run() error {
+	logrus.Debugf("Client run locking...")
+	c.runSync.Lock()
+	defer logrus.Debugf("Client run unlocked")
+	defer c.runSync.Unlock()
 	logrus.Debugf("Client running...")
-	var wg sync.WaitGroup
+	return c.run(c.Cmd)
+}
 
-	cmd := c.Cmd
+func (c *Client) run(cmd []string) error {
+	if cmd == nil || len(cmd) == 0 {
+		return fmt.Errorf("Client run: cmd should be provided")
+	}
+	var wg sync.WaitGroup
 	exit := make(chan os.Signal, 1)
 	signal.Notify(exit, os.Interrupt, os.Kill)
 
