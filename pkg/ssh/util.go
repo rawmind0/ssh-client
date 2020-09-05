@@ -1,6 +1,7 @@
 package ssh
 
 import (
+	"os/user"
 	"strings"
 
 	ghodssyaml "github.com/ghodss/yaml"
@@ -8,6 +9,15 @@ import (
 )
 
 const separator = ","
+
+// GetUserHome funct
+func GetUserHome() string {
+	user, err := user.Current()
+	if err != nil {
+		panic(err)
+	}
+	return user.HomeDir
+}
 
 func newErrorByChan() (chan *string, []string) {
 	wgErrors := make(chan *string)

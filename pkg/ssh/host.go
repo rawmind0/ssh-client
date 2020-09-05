@@ -4,15 +4,18 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"os/user"
+	"net"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
 
 const (
 	// DefaultPort const
-	DefaultPort     = "22"
-	hostDebugIndent = "  "
+	DefaultPort          = "22"
+	DefaultHostTimeout   = "60s"
+	DefaultHostKeepAlive = "60s"
+	hostDebugIndent      = "  "
 )
 
 // DefaultKeyPath var
@@ -30,42 +33,47 @@ type Host struct {
 	SSHKeyPath   string `yaml:"ssh_key_path" json:"sshKeyPath,omitempty"`
 	SSHCert      string `yaml:"ssh_cert" json:"sshCert,omitempty"`
 	SSHCertPath  string `yaml:"ssh_cert_path" json:"sshCertPath,omitempty"`
+	SSHTimeout   string `yaml:"ssh_timeout" json:"sshTimeout,omitempty"`
+	SSHKeepAlive string `yaml:"ssh_keep_alive" json:"sshKeepAlive,omitempty"`
 	dialer       *Dialer
 }
 
 // InitKeyPath func
 func InitKeyPath() string {
-	user, err := user.Current()
-	if err != nil {
-		panic(err)
-	}
-	DefaultKeyPath = user.HomeDir + "/.ssh/id_rsa"
+	DefaultKeyPath = GetUserHome() + "/.ssh/id_rsa"
 	return DefaultKeyPath
 }
 
-// Dial func
-func (h *Host) Dial(ctx context.Context) error {
-	if h.dialer != nil {
-		return nil
+// NewHostFromYAML func
+func NewHostFromYAML(config string) (*Host, error) {
+	logrus.Debugf("New host creating...")
+	host := &Host{}
+	if err := YAMLToInterface(config, host); err != nil {
+		return nil, err
 	}
-	logrus.Debugf("%s[%s:%s] host dialing", hostDebugIndent, h.Address, h.Port)
-	if len(h.User) == 0 {
-		return fmt.Errorf("[%s:%s] host dialing: user is nil", h.Address, h.Port)
+	if err := host.validate(); err != nil {
+		return nil, err
 	}
-
-	dialer, err := NewDialer(ctx, h.Address+":"+h.Port, h.User, h.Pass, h.SSHKey, h.SSHKeyPass, h.SSHAgentAuth)
-	if err != nil {
-		return fmt.Errorf("[%s:%s] host dialing: %v", h.Address, h.Port, err)
-	}
-	h.dialer = dialer
-	logrus.Debugf("%s[%s:%s] host dialed", hostDebugIndent, h.Address, h.Port)
-	return nil
+	logrus.Debugf("New host created")
+	return host, nil
 }
 
 func (h *Host) validate() error {
 	logrus.Debugf("%s[%s:%s] host validating...", hostDebugIndent, h.Address, h.Port)
 	if len(h.Address) == 0 {
 		return fmt.Errorf("host validating: no address provided")
+	}
+	if len(h.SSHTimeout) == 0 {
+		h.SSHTimeout = DefaultHostTimeout
+	}
+	if _, err := time.ParseDuration(h.SSHTimeout); err != nil {
+		return fmt.Errorf("parinsg timeout %v", err)
+	}
+	if len(h.SSHKeepAlive) == 0 {
+		h.SSHKeepAlive = DefaultHostKeepAlive
+	}
+	if _, err := time.ParseDuration(h.SSHKeepAlive); err != nil {
+		return fmt.Errorf("parinsg timeout %v", err)
 	}
 	if len(h.Port) == 0 {
 		h.Port = DefaultPort
@@ -87,6 +95,29 @@ func (h *Host) validate() error {
 	return nil
 }
 
+// TunnelUp funct
+func (h *Host) TunnelUp(ctx context.Context) error {
+	if h.dialer != nil {
+		err := h.dialer.tunnelUp(ctx)
+		if err != nil {
+			return fmt.Errorf("[%s:%s] host tunnelling: %v", h.Address, h.Port, err)
+		}
+		return nil
+	}
+	logrus.Debugf("%s[%s:%s] host tunnelling", hostDebugIndent, h.Address, h.Port)
+	if len(h.User) == 0 {
+		return fmt.Errorf("[%s:%s] host tunnelling: user is nil", h.Address, h.Port)
+	}
+
+	dialer, err := NewDialer(ctx, h.Address+":"+h.Port, h.User, h.Pass, h.SSHKey, h.SSHKeyPass, h.SSHAgentAuth, h.SSHTimeout, h.SSHKeepAlive)
+	if err != nil {
+		return fmt.Errorf("[%s:%s] host tunnelling: %v", h.Address, h.Port, err)
+	}
+	h.dialer = dialer
+	logrus.Debugf("%s[%s:%s] host tunnelled", hostDebugIndent, h.Address, h.Port)
+	return nil
+}
+
 // Close func
 func (h *Host) Close() error {
 	logrus.Debugf("%s[%s:%s] host closing...", hostDebugIndent, h.Address, h.Port)
@@ -101,10 +132,24 @@ func (h *Host) Close() error {
 	return nil
 }
 
+// Dial func
+func (h *Host) Dial(ctx context.Context, network, addr string) (net.Conn, error) {
+	logrus.Debugf("%s[%s:%s] host dialing...", hostDebugIndent, h.Address, h.Port)
+	err := h.TunnelUp(ctx)
+	if err != nil {
+		return nil, err
+	}
+	conn, err := h.dialer.Dial(ctx, network, addr)
+	if err != nil {
+		return nil, fmt.Errorf("[%s:%s] host dialing: %v", h.Address, h.Port, err)
+	}
+	return conn, nil
+}
+
 // Run func
 func (h *Host) Run(ctx context.Context, cmds []string, kind string) ([]byte, error) {
 	logrus.Debugf("%s[%s:%s] host running...", hostDebugIndent, h.Address, h.Port)
-	err := h.Dial(ctx)
+	err := h.TunnelUp(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -35,7 +35,7 @@ test: fmtcheck
 
 vet:
 	@echo "==> Checking that code complies with go vet requirements..."
-	@go vet $$(go list ./... | grep -v vendor/) ; if [ $$? -eq 1 ]; then \
+	@go vet $$(go list ./... | grep -v vendor/); if [ $$? -gt 0 ]; then \
 		echo ""; \
 		echo "Vet found suspicious constructs. Please check the reported constructs"; \
 		echo "and fix them if necessary before submitting the code for review."; \

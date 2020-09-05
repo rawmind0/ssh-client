@@ -65,9 +65,19 @@ func RunCommand() *cli.Command {
 			Value: ssh.InitKeyPath(),
 		},
 		&cli.StringFlag{
+			Name:  "ssh_keep_alive",
+			Usage: "SSH connection keep alive interval",
+			Value: ssh.DefaultHostKeepAlive,
+		},
+		&cli.StringFlag{
+			Name:  "ssh_timeout",
+			Usage: "SSH connection timeout interval",
+			Value: ssh.DefaultHostTimeout,
+		},
+		&cli.StringFlag{
 			Name:  "timeout",
 			Usage: "Command execution timeout interval",
-			Value: ssh.DefaultTimeout,
+			Value: ssh.DefaultPoolTimeout,
 		},
 	}
 
@@ -106,6 +116,8 @@ func RunFromCli(ctx *cli.Context) error {
 	params["ssh_key"] = ctx.String("ssh_key")
 	params["ssh_key_pass"] = ctx.String("ssh_key_pass")
 	params["ssh_key_path"] = ctx.String("ssh_key_path")
+	params["ssh_keep_alive"] = ctx.String("ssh_keep_alive")
+	params["ssh_timeout"] = ctx.String("ssh_timeout")
 
 	if output["hosts"] == nil {
 		output["hosts"] = make([]interface{}, len(hosts))
@@ -129,7 +141,7 @@ func Run(params map[string]interface{}) error {
 	if err != nil {
 		return err
 	}
-	client, err := ssh.NewClientFromYAML(config)
+	client, err := ssh.NewPoolFromYAML(config)
 	if err != nil {
 		return err
 	}
