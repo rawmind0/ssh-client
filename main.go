@@ -13,7 +13,7 @@ import (
 
 // VERSION gets overridden at build time using -X main.VERSION=$VERSION
 var VERSION = "dev"
-var released = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
+var released = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
 
 func main() {
 	logrus.SetOutput(colorable.NewColorableStdout())
