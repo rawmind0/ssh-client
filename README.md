@@ -51,10 +51,11 @@ USAGE:
    ssh-client run [command options] [arguments...]
 
 OPTIONS:
-  --config value, -c value  Specify config YAML file [$SSH_CLIENT_NODES]
-   --cmd value               Command to run. Multiple entry allowed sepparated by ,
-   --cmd_file value          Script files to run. Multiple entry allowed sepparated by ,
-   --host value              Host ip to connect. Multiple entry allowed sepparated by ,
+   --cmds value              Comma separated commands to run
+   --cmd_files value         Comma separated script files to run
+   --timeout value           Command execution timeout interval. Set 0 to disable (default: "300s")
+   --config value, -c value  Specify config YAML file [$SSH_CLIENT_CONFIG]
+   --hosts value             Comma separated host ip to connect
    --port value, -p value    Host port to connect (default: "22")
    --user value, -u value    Username to auth (default: "rancher")
    --password value          Password to auth
@@ -62,9 +63,8 @@ OPTIONS:
    --ssh_key value           SSH key to auth
    --ssh_key_pass value      SSH key passphrase to auth. Optional
    --ssh_key_path value      SSH key path to auth (default: "/Users/rsanchez/.ssh/id_rsa")
-   --ssh_keep_alive value    SSH connection keep alive interval (default: "60s")
-   --ssh_timeout value       SSH connection timeout interval (default: "60s")
-   --timeout value           Command execution timeout interval (default: "300s")
+   --ssh_keep_alive value    SSH connection keep alive interval (default: "30s")
+   --ssh_timeout value       SSH connection timeout interval. Set 0 to disable (default: "30s")
    --help, -h                show help (default: false)
 ```
 
@@ -74,10 +74,11 @@ The tool can be configured in different ways:
 
 * using run arguments:
 ```
-   --config value, -c value  Specify config YAML file [$SSH_CLIENT_NODES]
-   --cmd value               Command to run. Multiple entry allowed sepparated by ,
-   --cmd_file value          Script files to run. Multiple entry allowed sepparated by ,
-   --host value              Host ip to connect. Multiple entry allowed sepparated by ,
+   --cmds value              Comma separated commands to run
+   --cmd_files value         Comma separated script files to run
+   --timeout value           Command execution timeout interval. Set 0 to disable (default: "300s")
+   --config value, -c value  Specify config YAML file [$SSH_CLIENT_CONFIG]
+   --hosts value             Comma separated host ip to connect
    --port value, -p value    Host port to connect (default: "22")
    --user value, -u value    Username to auth (default: "rancher")
    --password value          Password to auth
@@ -85,9 +86,8 @@ The tool can be configured in different ways:
    --ssh_key value           SSH key to auth
    --ssh_key_pass value      SSH key passphrase to auth. Optional
    --ssh_key_path value      SSH key path to auth (default: "/Users/rsanchez/.ssh/id_rsa")
-   --ssh_keep_alive value    SSH connection keep alive interval (default: "60s")
-   --ssh_timeout value       SSH connection timeout interval (default: "60s")
-   --timeout value           Command execution timeout interval (default: "300s")
+   --ssh_keep_alive value    SSH connection keep alive interval (default: "30s")
+   --ssh_timeout value       SSH connection timeout interval. Set 0 to disable (default: "30s")
    --help, -h                show help (default: false)
 ```
 
@@ -106,11 +106,11 @@ hosts:
   ssh_cert_path: string
   ssh_timeout: string
   ssh_keep_alive: string
-cmd: 
+cmds: 
   - cmd1
   ...
   - cmdN
-cmd_file:
+cmd_files:
   - file1
   ...
   - fileN 

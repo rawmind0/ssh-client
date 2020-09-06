@@ -38,7 +38,7 @@ func mainErr() error {
 			}
 		}
 		if !released.MatchString(app.Version) {
-			logrus.Warnf("This is not an officially supported version (%s) of %s. Please download the latest official release at https://github.com/rancher/rke/releases/latest", app.Version, app.Name)
+			logrus.Warnf("This is not an officially released version (%s) of %s. Latest official release at https://github.com/rawmind0/ssh-client/releases/latest", app.Version, app.Name)
 		}
 		return nil
 	}

@@ -13,8 +13,9 @@ import (
 const (
 	// DefaultPort const
 	DefaultPort          = "22"
-	DefaultHostTimeout   = "60s"
-	DefaultHostKeepAlive = "60s"
+	DefaultHostTimeout   = "30s"
+	DefaultHostKeepAlive = "30s"
+	DefaultHostKeyfile   = "/.ssh/id_rsa"
 	hostDebugIndent      = "  "
 )
 
@@ -38,10 +39,8 @@ type Host struct {
 	dialer       *Dialer
 }
 
-// InitKeyPath func
-func InitKeyPath() string {
-	DefaultKeyPath = GetUserHome() + "/.ssh/id_rsa"
-	return DefaultKeyPath
+func init() {
+	DefaultKeyPath = GetUserHome() + DefaultHostKeyfile
 }
 
 // NewHostFromYAML func

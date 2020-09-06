@@ -14,10 +14,10 @@ const DefaultPoolTimeout = "300s"
 
 // PoolConfig struct
 type PoolConfig struct {
-	Hosts   []Host   `yaml:"hosts" json:"hosts,omitempty"`
-	Cmd     []string `yaml:"cmd" json:"cmd,omitempty"`
-	CmdFile []string `yaml:"cmd_file,omitempty" json:"cmd_file,omitempty"`
-	Timeout string   `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	Hosts    []Host   `yaml:"hosts" json:"hosts,omitempty"`
+	Cmds     []string `yaml:"cmds" json:"cmds,omitempty"`
+	CmdFiles []string `yaml:"cmd_files,omitempty" json:"cmd_files,omitempty"`
+	Timeout  string   `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 }
 
 // NewPoolConfigFromYAML func
@@ -30,20 +30,20 @@ func NewPoolConfigFromYAML(config string) (*PoolConfig, error) {
 	return poolConfig, poolConfig.validate()
 }
 
-func (c *PoolConfig) setCmd(config []string) {
-	c.Cmd = config
+func (c *PoolConfig) setCmds(config []string) {
+	c.Cmds = config
 }
 
 func (c *PoolConfig) getHosts() []Host {
 	return c.Hosts
 }
 
-func (c *PoolConfig) getCmd() []string {
-	return c.Cmd
+func (c *PoolConfig) getCmds() []string {
+	return c.Cmds
 }
 
-func (c *PoolConfig) getHCmdFile() []string {
-	return c.CmdFile
+func (c *PoolConfig) getCmdFiles() []string {
+	return c.CmdFiles
 }
 
 func (c *PoolConfig) getTimeout() string {
@@ -52,14 +52,14 @@ func (c *PoolConfig) getTimeout() string {
 
 func (c *PoolConfig) validate() error {
 	logrus.Debugf("Pool config validating...")
-	for _, cmdFile := range c.getHCmdFile() {
+	for _, cmdFile := range c.getCmdFiles() {
 		cmdBytes, err := ioutil.ReadFile(cmdFile)
 		if err != nil {
 			return fmt.Errorf("Reading config file: %v", err)
 		}
-		c.Cmd = append(c.Cmd, "sh -c '"+string(cmdBytes)+"'")
+		c.Cmds = append(c.Cmds, "sh -c '"+string(cmdBytes)+"'")
 	}
-	if c.Cmd == nil || len(c.getCmd()) == 0 {
+	if c.Cmds == nil || len(c.getCmds()) == 0 {
 		return fmt.Errorf("cmd should be provided")
 	}
 	hostList := c.getHosts()
@@ -69,8 +69,8 @@ func (c *PoolConfig) validate() error {
 	if len(c.Timeout) == 0 {
 		c.Timeout = DefaultPoolTimeout
 	}
-	if _, err := time.ParseDuration(c.Timeout); err != nil {
-		return fmt.Errorf("parinsg timeout %v", err)
+	if dur, err := time.ParseDuration(c.Timeout); err != nil {
+		return fmt.Errorf("parsing timeout %s: %v", dur.String(), err)
 	}
 	errStrings := []string{}
 	hostIDS := make(map[string]int, len(hostList))
@@ -89,6 +89,6 @@ func (c *PoolConfig) validate() error {
 	if len(errStrings) > 0 {
 		return fmt.Errorf("%s", strings.Join(errStrings, "\n"))
 	}
-	logrus.Debugf("Config validated")
+	logrus.Debugf("Pool config validated")
 	return nil
 }

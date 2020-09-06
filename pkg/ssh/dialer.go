@@ -243,13 +243,13 @@ func (c *Dialer) Close() error {
 }
 
 func (c *Dialer) run(ctx context.Context, cmd, kind string) ([]byte, error) {
-	err := c.tunnelUp(ctx)
-	if err != nil {
-		return nil, err
-	}
 	logrus.Debugf("%s[%s] Dialer run executing...", dialerDebugIndent, c.config.addr)
 	if len(cmd) == 0 {
 		return nil, fmt.Errorf("Dialer run failed: Command is nil")
+	}
+	err := c.tunnelUp(ctx)
+	if err != nil {
+		return nil, err
 	}
 	session, err := c.tunnel.NewSession()
 	if err != nil {

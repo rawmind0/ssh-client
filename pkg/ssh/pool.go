@@ -35,32 +35,11 @@ func NewPoolFromYAML(config string) (*Pool, error) {
 	return pool, nil
 }
 
-func (c *Pool) SetCmd(config string) error {
-	logrus.Debugf("Cmd setting...")
-	poolConfig, err := NewPoolConfigFromYAML(config)
-	if err != nil {
-		return err
-	}
-	poolConfig = c.config
-	err = c.config.validate()
-	if err != nil {
-		return fmt.Errorf("Setting cmd: %v", err)
-	}
-
-	logrus.Debugf("Setting cmd locking...")
-	c.runSync.Lock()
-	c.config.setCmd(poolConfig.Cmd)
-	c.runSync.Unlock()
-	logrus.Debugf("Setting cmd unlocked")
-
-	logrus.Debugf("Cmd set")
-	return nil
-}
-
 func (c *Pool) validate() error {
 	duration, err := time.ParseDuration(c.config.getTimeout())
+	logrus.Debugf("duration: %v", duration.Seconds())
 	if err != nil {
-		return fmt.Errorf("Validating pool: parsing timeout: %v", err)
+		return fmt.Errorf("Validating pool: parsing timeout %s: %v", err, duration.String())
 	}
 	c.timeout = duration
 	return nil
@@ -77,14 +56,14 @@ func (c *Pool) Run() error {
 	logrus.Debugf("Pool running...")
 	logrus.Debugf("Pool run locking...")
 	c.runSync.Lock()
-	cmd := c.config.getCmd()
+	cmds := c.config.getCmds()
 	c.runSync.Unlock()
 	logrus.Debugf("Pool run unlocked")
-	return c.run(cmd)
+	return c.run(cmds)
 }
 
-func (c *Pool) run(cmd []string) error {
-	if cmd == nil || len(cmd) == 0 {
+func (c *Pool) run(cmds []string) error {
+	if cmds == nil || len(cmds) == 0 {
 		return fmt.Errorf("Pool run: cmd should be provided")
 	}
 	var wg sync.WaitGroup
@@ -92,13 +71,17 @@ func (c *Pool) run(cmd []string) error {
 	signal.Notify(exit, os.Interrupt, os.Kill)
 
 	wgErrors, errStrings := newErrorByChan()
-	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	ctx, cancel := context.WithCancel(context.Background())
+	if c.timeout.Nanoseconds() > 0 {
+		logrus.Debugf("Pool run timeout: %s", c.timeout.String())
+		ctx, cancel = context.WithTimeout(ctx, c.timeout)
+	}
 	defer cancel()
 	for _, host := range c.config.getHosts() {
 		wg.Add(1)
 		go func(h Host) {
 			defer wg.Done()
-			_, err := h.Run(ctx, cmd, dialerRunKindCombined)
+			_, err := h.Run(ctx, cmds, dialerRunKindCombined)
 			if err != nil {
 				message := err.Error()
 				if len(message) > 0 {
@@ -114,35 +97,40 @@ func (c *Pool) run(cmd []string) error {
 		close(wgErrors)
 	}()
 
-running:
 	for {
 		select {
 		case errStr := <-wgErrors:
-			if errStr == nil {
-				break running
+			if errStr != nil {
+				errStrings = append(errStrings, *errStr)
 			}
-			errStrings = append(errStrings, *errStr)
+			if len(errStrings) > 0 {
+				fmt.Printf("error\n")
+				return fmt.Errorf("Pool run failed:\n%s", stringsToLines(errStrings))
+			}
+			fmt.Printf("done\n")
+			logrus.Debugf("Pool runned")
+			return nil
+
 		case <-exit:
 			logrus.Info("Exit signal detected....trying to close properly...")
 			cancel()
 			<-wgErrors
-			fmt.Printf("killed\n")
-			return fmt.Errorf("Pool killed by user request: %v", ctx.Err())
+			fmt.Printf("cancelled\n")
+			return fmt.Errorf("Pool run cancelled by user request: %v", ctx.Err())
 		case <-ctx.Done():
-			logrus.Errorf("Pool run context timeout: %s", c.config.getTimeout())
 			<-wgErrors
-			fmt.Printf("killed\n")
-			return fmt.Errorf("Pool run context cancelled: %v", ctx.Err())
+			reason := "unknown"
+			switch ctx.Err() {
+			case context.Canceled:
+				reason = "cancelled"
+			case context.DeadlineExceeded:
+				reason = "timeout"
+			}
+			fmt.Println(reason)
+			logrus.Debugf("Pool run %s: %s", reason, ctx.Err())
+			return fmt.Errorf("Pool run %s: %v", reason, ctx.Err())
 		}
 	}
-
-	if len(errStrings) > 0 {
-		fmt.Printf("error\n")
-		return fmt.Errorf("Pool run failed:\n%s", stringsToLines(errStrings))
-	}
-	fmt.Printf("ok\n")
-	logrus.Debugf("Pool runned")
-	return nil
 }
 
 // Close func

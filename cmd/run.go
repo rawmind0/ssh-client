@@ -13,73 +13,21 @@ import (
 func RunCommand() *cli.Command {
 	runFlags := []cli.Flag{
 		&cli.StringFlag{
-			Name:    "config",
-			Aliases: []string{"c"},
-			Usage:   "Specify config YAML file",
-			EnvVars: []string{"SSH_CLIENT_NODES"},
+			Name:  "cmds",
+			Usage: "Comma separated commands to run",
 		},
 		&cli.StringFlag{
-			Name:  "cmd",
-			Usage: "Command to run. Multiple entry allowed sepparated by ,",
-		},
-		&cli.StringFlag{
-			Name:  "cmd_file",
-			Usage: "Script files to run. Multiple entry allowed sepparated by ,",
-		},
-		&cli.StringFlag{
-			Name:  "host",
-			Usage: "Host ip to connect. Multiple entry allowed sepparated by ,",
-		},
-		&cli.StringFlag{
-			Name:    "port",
-			Aliases: []string{"p"},
-			Usage:   "Host port to connect",
-			Value:   ssh.DefaultPort,
-		},
-		&cli.StringFlag{
-			Name:    "user",
-			Aliases: []string{"u"},
-			Usage:   "Username to auth",
-			Value:   "rancher",
-		},
-		&cli.StringFlag{
-			Name:  "password",
-			Usage: "Password to auth",
-		},
-		&cli.BoolFlag{
-			Name:  "ssh_agent_auth",
-			Usage: "Use SSH agent auth",
-			Value: false,
-		},
-		&cli.StringFlag{
-			Name:  "ssh_key",
-			Usage: "SSH key to auth",
-		},
-		&cli.StringFlag{
-			Name:  "ssh_key_pass",
-			Usage: "SSH key passphrase to auth. Optional",
-		},
-		&cli.StringFlag{
-			Name:  "ssh_key_path",
-			Usage: "SSH key path to auth",
-			Value: ssh.InitKeyPath(),
-		},
-		&cli.StringFlag{
-			Name:  "ssh_keep_alive",
-			Usage: "SSH connection keep alive interval",
-			Value: ssh.DefaultHostKeepAlive,
-		},
-		&cli.StringFlag{
-			Name:  "ssh_timeout",
-			Usage: "SSH connection timeout interval",
-			Value: ssh.DefaultHostTimeout,
+			Name:  "cmd_files",
+			Usage: "Comma separated script files to run",
 		},
 		&cli.StringFlag{
 			Name:  "timeout",
-			Usage: "Command execution timeout interval",
+			Usage: "Command execution timeout interval. Set 0 to disable",
 			Value: ssh.DefaultPoolTimeout,
 		},
 	}
+
+	runFlags = append(runFlags, commonFlags()...)
 
 	return &cli.Command{
 		Name:   "run",
@@ -106,7 +54,7 @@ func RunFromCli(ctx *cli.Context) error {
 			return fmt.Errorf("Reading config file: %v", err)
 		}
 	}
-	host := ctx.String("host")
+	host := ctx.String("hosts")
 	hosts := ssh.SplitBySep(host)
 	params := map[string]interface{}{}
 	params["port"] = ctx.String("port")
@@ -122,11 +70,11 @@ func RunFromCli(ctx *cli.Context) error {
 	if output["hosts"] == nil {
 		output["hosts"] = make([]interface{}, len(hosts))
 	}
-	if cmd := ctx.String("cmd"); len(cmd) > 0 {
-		output["cmd"] = ssh.SplitBySep(cmd)
+	if cmds := ctx.String("cmds"); len(cmds) > 0 {
+		output["cmds"] = ssh.SplitBySep(cmds)
 	}
-	if cmdFile := ctx.String("cmd_file"); len(cmdFile) > 0 {
-		output["cmd_file"] = ssh.SplitBySep(cmdFile)
+	if cmdFiles := ctx.String("cmd_files"); len(cmdFiles) > 0 {
+		output["cmd_files"] = ssh.SplitBySep(cmdFiles)
 	}
 	for i := range hosts {
 		params["address"] = hosts[i]
