@@ -68,4 +68,4 @@ vendor:
 	@echo "==> Updating vendor modules..."
 	@GO111MODULE=on go mod vendor
 
-.PHONY: bin build test testacc vet fmt fmtcheck vendor dapper-build dapper-ci dapper-testacc
+.PHONY: bin build test testacc vet fmt fmtcheck vendor dapper-build dapper-ci
