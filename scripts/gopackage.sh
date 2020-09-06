@@ -28,15 +28,15 @@ for i in build/bin/*; do
         EXT=.exe
     fi
 
-    cp $i ${DIR}/ssh-client_${VERSION}${EXT}
+    cp $i ${DIR}/ssh-client${EXT}
 
     (
         cd $DIR
         NAME=$(basename $i | cut -f1 -d_)
         ARCH=$(basename $i | cut -f2,3 -d_ | cut -f1 -d.)
-        ARCHIVE=${NAME}_${VERSION_NO_V}_${ARCH}.zip
+        ARCHIVE=${NAME}_${VERSION_NO_V}_${ARCH}.tar.bz
         echo "Packaging dist/artifacts/${VERSION}/${ARCHIVE} ..."
-        zip -q $DIST/${VERSION}/${ARCHIVE} *
+        tar -cjf $DIST/${VERSION}/${ARCHIVE} *
     )
 done
 
