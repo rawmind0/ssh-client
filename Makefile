@@ -20,12 +20,9 @@ dapper-ci: .dapper
 build: validate
 	@sh -c "'$(CURDIR)/scripts/gobuild.sh'"
 
-build-rancher: validate
-	@sh -c "'$(CURDIR)/scripts/gobuild.sh'"
-
 validate: vet lint fmtcheck
 
-package-rancher:
+package:
 	@sh -c "'$(CURDIR)/scripts/gopackage.sh'"
 
 test: fmtcheck

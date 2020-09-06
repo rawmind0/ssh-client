@@ -22,8 +22,8 @@ steps:
   - mkdir -p /go/src/github.com/rawmind0
   - ln -s /drone/src /go/src/github.com/rawmind0/ssh-client
   - cd /go/src/github.com/rawmind0/ssh-client
-  - make build-rancher
-  - make package-rancher
+  - make build
+  - make package
   when:
     event: tag
 
