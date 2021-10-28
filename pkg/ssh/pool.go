@@ -11,6 +11,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Pool struct
 type Pool struct {
 	config  *PoolConfig
 	timeout time.Duration

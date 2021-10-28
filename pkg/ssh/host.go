@@ -12,10 +12,12 @@ import (
 
 const (
 	// DefaultPort const
-	DefaultPort          = "22"
-	DefaultHostTimeout   = "30s"
+	DefaultPort = "22"
+	// DefaultHostTimeout const
+	DefaultHostTimeout = "30s"
+	// DefaultHostKeepAlive const
 	DefaultHostKeepAlive = "30s"
-	DefaultHostKeyfile   = "/.ssh/id_rsa"
+	defaultHostKeyfile   = "/.ssh/id_rsa"
 	hostDebugIndent      = "  "
 )
 
@@ -40,7 +42,7 @@ type Host struct {
 }
 
 func init() {
-	DefaultKeyPath = GetUserHome() + DefaultHostKeyfile
+	DefaultKeyPath = GetUserHome() + defaultHostKeyfile
 }
 
 // NewHostFromYAML func
@@ -94,7 +96,7 @@ func (h *Host) validate() error {
 	return nil
 }
 
-// TunnelUp funct
+// TunnelUp func
 func (h *Host) TunnelUp(ctx context.Context) error {
 	if h.dialer != nil {
 		err := h.dialer.tunnelUp(ctx)

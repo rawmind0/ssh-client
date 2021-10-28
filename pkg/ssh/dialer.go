@@ -44,22 +44,19 @@ func NewDialer(ctx context.Context, addr, user, pass, key, keyPass string, keyAg
 	if len(addr) == 0 {
 		return nil, fmt.Errorf("New dialer: host address should be provided")
 	}
-	if addr == dialerLocal {
-
-	}
 	if len(timeout) == 0 {
 		timeout = dialerTimeout
 	}
 	timeoutDuration, err := time.ParseDuration(timeout)
 	if err != nil {
-		return nil, fmt.Errorf("New dialer: setting timeout: %v", err)
+		return nil, fmt.Errorf("New dialer: parsing timeout: %v", err)
 	}
 	if len(keepAlive) == 0 {
 		keepAlive = dialerKeepAlive
 	}
 	keepAliveDuration, err := time.ParseDuration(keepAlive)
 	if err != nil {
-		return nil, fmt.Errorf("New dialer: setting keep alive: %v", err)
+		return nil, fmt.Errorf("New dialer: parsing keep alive: %v", err)
 	}
 	dialer := &Dialer{
 		config: &dialerConfig{
@@ -69,7 +66,7 @@ func NewDialer(ctx context.Context, addr, user, pass, key, keyPass string, keyAg
 			keepAlive: keepAliveDuration,
 		},
 	}
-	kind, err := dialer.setConfig(user, pass, key, keyPass, keyAgent)
+	err = dialer.setConfig(user, pass, key, keyPass, keyAgent)
 	if err != nil {
 		return nil, fmt.Errorf("New dialer %v", err)
 	}
@@ -77,17 +74,17 @@ func NewDialer(ctx context.Context, addr, user, pass, key, keyPass string, keyAg
 	if err != nil {
 		return nil, fmt.Errorf("New dialer %v", err)
 	}
-	logrus.Debugf("%s[%s] New dialer created: %s", dialerDebugIndent, dialer.config.addr, kind)
+	logrus.Debugf("%s[%s] New dialer created", dialerDebugIndent, dialer.config.addr)
 	return dialer, nil
 }
 
-func (c *Dialer) setConfig(user, pass, key, keyPass string, keyAgent bool) (string, error) {
+func (c *Dialer) setConfig(user, pass, key, keyPass string, keyAgent bool) error {
 	if len(user) == 0 {
-		return "", fmt.Errorf("config: user should be provided")
+		return fmt.Errorf("config: user should be provided")
 	}
-	if c.config.addr == "local" {
+	if c.config.addr == dialerLocal {
 		c.isLocal = true
-		return "local", nil
+		return nil
 	}
 	config := &ssh.ClientConfig{
 		User:            user,
@@ -104,34 +101,34 @@ func (c *Dialer) setConfig(user, pass, key, keyPass string, keyAgent bool) (stri
 			signer, err = ssh.ParsePrivateKey([]byte(key))
 		}
 		if err != nil {
-			return "", fmt.Errorf("config: publickey auth: %v", err)
+			return fmt.Errorf("config: publickey auth: %v", err)
 		}
 		config.Auth = append(config.Auth, ssh.PublicKeys(signer))
 		logrus.Debugf("%s[%s] New dialer config: ssh key auth", dialerDebugIndent, c.config.addr)
 		c.config.SSHconfig = config
-		return "ssh key", nil
+		return nil
 	}
 
 	if sshAgentSock := os.Getenv("SSH_AUTH_SOCK"); len(sshAgentSock) > 0 && keyAgent {
 		sshAgent, err := net.Dial("unix", sshAgentSock)
 		if err != nil {
-			return "", fmt.Errorf("config: Cannot connect to SSH Auth socket %q: %s", sshAgentSock, err)
+			return fmt.Errorf("config: Cannot connect to SSH Auth socket %q: %s", sshAgentSock, err)
 		}
 		defer sshAgent.Close()
 		config.Auth = append(config.Auth, ssh.PublicKeysCallback(agent.NewClient(sshAgent).Signers))
 		logrus.Debugf("%s[%s] New dialer config: ssh key agent auth", dialerDebugIndent, c.config.addr)
 		c.config.SSHconfig = config
-		return "ssh key agent", nil
+		return nil
 	}
 
 	if len(pass) > 0 {
 		config.Auth = append(config.Auth, ssh.Password(pass))
 		logrus.Debugf("%s[%s] New dialer config: password auth", dialerDebugIndent, c.config.addr)
 		c.config.SSHconfig = config
-		return "password", nil
+		return nil
 	}
 
-	return "", fmt.Errorf("New dialer config: auth method not found")
+	return fmt.Errorf("New dialer config: auth method not found")
 }
 
 func (c *Dialer) newDialer() net.Dialer {
@@ -143,8 +140,11 @@ func (c *Dialer) newDialer() net.Dialer {
 
 // Dial funct
 func (c *Dialer) Dial(ctx context.Context, network, addr string) (net.Conn, error) {
-	if network == dialerTunnelDial && (c.tunnel != nil || c.isLocal) {
-		return nil, nil
+	if network == dialerTunnelDial {
+		if c.tunnel != nil || c.isLocal {
+			return nil, nil
+		}
+		return nil, c.dialTunnel(ctx)
 	}
 	connKey := network + "_" + addr
 	if c.conns[connKey] != nil {
@@ -161,63 +161,28 @@ func (c *Dialer) Dial(ctx context.Context, network, addr string) (net.Conn, erro
 		logrus.Debugf("%s[local]->%s Dialer opened", c.config.addr, connKey)
 		return conn, nil
 	}
-	wgErrors, errStrings := newErrorByChan()
-	go func() {
-		defer close(wgErrors)
-		if c.tunnel == nil {
-			err := c.dialTunnel()
-			if err != nil {
-				message := err.Error()
-				if len(message) > 0 {
-					wgErrors <- &message
-					return
-				}
-			}
-			if network == dialerTunnelDial {
-				logrus.Debugf("%s[%s]->%s Dialer opened", dialerDebugIndent, c.config.addr, connKey)
-				return
-			}
-		}
-		conn, err := c.tunnel.Dial(network, addr)
-		c.conns[connKey] = conn
-		if err != nil {
-			message := err.Error()
-			if len(message) > 0 {
-				wgErrors <- &message
-				return
-			}
-
-		}
-	}()
-	select {
-	case <-ctx.Done():
-		logrus.Debugf("%s[%s]->%s Dialer open cancelled: %s", dialerDebugIndent, c.config.addr, connKey, ctx.Err())
-		return nil, fmt.Errorf("Dialer open killed by user request: %s", connKey)
-	case errStr := <-wgErrors:
-		if errStr == nil {
-			break
-		}
-		errStrings = append(errStrings, *errStr)
+	conn, err := c.tunnel.Dial(network, addr)
+	if err != nil {
+		return nil, err
 	}
-	if len(errStrings) > 0 {
-		return nil, fmt.Errorf("Dialer open failed: %s\n%s", connKey, stringsToLines(errStrings))
-	}
-	logrus.Debugf("%s[%s]->%s Dialer opened", dialerDebugIndent, c.config.addr, connKey)
+	c.conns[connKey] = conn
 	return c.conns[connKey], nil
 }
 
-func (c *Dialer) dialTunnel() error {
-	logrus.Debugf("%s[%s] Dialer tunneling..", dialerDebugIndent, c.config.addr)
-	dialer := c.newDialer()
-	conn, err := dialer.Dial(c.config.network, c.config.addr)
-	if err != nil {
-		return fmt.Errorf("Tunnel up failed: %v", err)
+func (c *Dialer) dialTunnel(ctx context.Context) error {
+	if c.tunnel == nil {
+		logrus.Debugf("%s[%s] Dialer tunneling..", dialerDebugIndent, c.config.addr)
+		dialer := c.newDialer()
+		conn, err := dialer.DialContext(ctx, c.config.network, c.config.addr)
+		if err != nil {
+			return fmt.Errorf("Tunnel up failed: %v", err)
+		}
+		sshConn, sshChans, sshReqs, err := ssh.NewClientConn(conn, c.config.addr, c.config.SSHconfig)
+		if err != nil {
+			return fmt.Errorf("Tunnel up failed: %v", err)
+		}
+		c.tunnel = ssh.NewClient(sshConn, sshChans, sshReqs)
 	}
-	sshConn, sshChans, sshReqs, err := ssh.NewClientConn(conn, c.config.addr, c.config.SSHconfig)
-	if err != nil {
-		return fmt.Errorf("Tunnel up failed: %v", err)
-	}
-	c.tunnel = ssh.NewClient(sshConn, sshChans, sshReqs)
 	logrus.Debugf("%s[%s] Dialer tunneled", dialerDebugIndent, c.config.addr)
 	return nil
 }
@@ -257,8 +222,9 @@ func (c *Dialer) run(ctx context.Context, cmd, kind string) ([]byte, error) {
 	}
 	defer session.Close()
 	var data []byte
-	wgErrors, errStrings := newErrorByChan()
+	wgErrors, _ := newErrorByChan()
 	go func() {
+		defer close(wgErrors)
 		var err error
 		switch kind {
 		case dialerRunKindCmd:
@@ -271,14 +237,12 @@ func (c *Dialer) run(ctx context.Context, cmd, kind string) ([]byte, error) {
 				err = fmt.Errorf("%s", string(data))
 			}
 		}
-
 		if err != nil {
 			message := err.Error()
 			if len(message) > 0 {
 				wgErrors <- &message
 			}
 		}
-		close(wgErrors)
 	}()
 
 	select {
@@ -290,10 +254,7 @@ func (c *Dialer) run(ctx context.Context, cmd, kind string) ([]byte, error) {
 		if errStr == nil {
 			break
 		}
-		errStrings = append(errStrings, *errStr)
-	}
-	if len(errStrings) > 0 {
-		return data, fmt.Errorf("Dialer run failed:\n%s", stringsToLines(errStrings))
+		return data, fmt.Errorf("Dialer run failed:\n%s", *errStr)
 	}
 	logrus.Debugf("%s[%s] Dialer run executed", dialerDebugIndent, c.config.addr)
 	return data, nil
